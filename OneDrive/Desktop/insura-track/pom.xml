@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
 	<modelVersion>4.0.0</modelVersion>
 
@@ -15,7 +15,7 @@
 	<artifactId>insura-track</artifactId>
 	<version>1.0.0</version>
 	<name>InsuraTrack</name>
-	<description>Multi-company Insurance Management System</description>
+	<description>Insurance Management System</description>
 
 	<properties>
 		<java.version>17</java.version>
@@ -84,14 +84,20 @@
 			<version>0.11.5</version>
 		</dependency>
 
-		<!-- ✅ iText PDF -->
+		<!-- ✅ iText PDF (FIXED) -->
 		<dependency>
 			<groupId>com.itextpdf</groupId>
-			<artifactId>itext7-core</artifactId>
+			<artifactId>kernel</artifactId>
 			<version>7.2.5</version>
 		</dependency>
 
-		<!-- Apache POI (Excel) -->
+		<dependency>
+			<groupId>com.itextpdf</groupId>
+			<artifactId>layout</artifactId>
+			<version>7.2.5</version>
+		</dependency>
+
+		<!-- Excel -->
 		<dependency>
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi</artifactId>
@@ -115,17 +121,10 @@
 
 	<build>
 		<plugins>
+			<!-- Spring Boot Plugin -->
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<configuration>
-					<excludes>
-						<exclude>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</exclude>
-					</excludes>
-				</configuration>
 			</plugin>
 		</plugins>
 	</build>
