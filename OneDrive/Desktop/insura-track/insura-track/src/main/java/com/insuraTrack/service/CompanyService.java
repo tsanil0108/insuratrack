@@ -5,6 +5,7 @@ import com.insuraTrack.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -19,11 +20,12 @@ public class CompanyService {
     }
 
     public List<Company> getAll() {
-        return companyRepository.findByActiveTrue();
+        return companyRepository.findByActiveTrueAndDeletedFalse();
     }
 
     public Company getById(String id) {
         return companyRepository.findById(id)
+                .filter(company -> !company.isDeleted())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
     }
 
@@ -33,15 +35,22 @@ public class CompanyService {
         company.setShortName(updated.getShortName());
         company.setAddress(updated.getAddress());
         company.setContactEmail(updated.getContactEmail());
+        company.setActive(updated.isActive());
         return companyRepository.save(company);
     }
 
-    // Soft delete — moves to recycle bin
+    // ✅ FIXED DELETE METHOD - Soft Delete
+    @Transactional
     public void delete(String id) {
-        Company company = getById(id);
+        Company company = companyRepository.findById(id)
+                .filter(c -> !c.isDeleted())
+                .orElseThrow(() -> new RuntimeException("Company not found or already deleted"));
+
         String currentUser = SecurityContextHolder.getContext()
                 .getAuthentication().getName();
         company.softDelete(currentUser);
         companyRepository.save(company);
+
+        System.out.println("✅ Company soft deleted: " + id + " by " + currentUser);
     }
 }

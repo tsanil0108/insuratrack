@@ -15,12 +15,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RecycleBinService {
 
-    private final PolicyRepository          policyRepository;
-    private final CompanyRepository         companyRepository;
+    private final PolicyRepository            policyRepository;
+    private final CompanyRepository           companyRepository;
     private final InsuranceProviderRepository providerRepository;
-    private final PremiumPaymentRepository  paymentRepository;
+    private final PremiumPaymentRepository    paymentRepository;
+    private final InsuranceTypeRepository     insuranceTypeRepository; // ← NEW
 
-    // ─── Get all soft-deleted items ──────────────────────────
+    @Transactional(readOnly = true)
     public List<RecycleBinItem> getAllDeleted() {
         List<RecycleBinItem> items = new ArrayList<>();
 
@@ -30,7 +31,10 @@ public class RecycleBinService {
                         .type("POLICY")
                         .name(p.getPolicyNumber())
                         .policyNumber(p.getPolicyNumber())
+                        .assignedTo(p.getUser() != null ? p.getUser().getName() : "")
                         .companyName(p.getCompany() != null ? p.getCompany().getName() : "")
+                        .providerName(p.getProvider() != null ? p.getProvider().getName() : "")
+                        .insuranceTypeName(p.getInsuranceType() != null ? p.getInsuranceType().getName() : "")
                         .description(p.getDescription())
                         .deletedBy(p.getDeletedBy())
                         .deletedAt(p.getDeletedAt() != null ? p.getDeletedAt().toString() : "")
@@ -42,6 +46,10 @@ public class RecycleBinService {
                         .id(c.getId())
                         .type("COMPANY")
                         .name(c.getName())
+                        .assignedTo("")
+                        .companyName(c.getName())
+                        .providerName("")
+                        .insuranceTypeName("")
                         .description(c.getAddress())
                         .deletedBy(c.getDeletedBy())
                         .deletedAt(c.getDeletedAt() != null ? c.getDeletedAt().toString() : "")
@@ -53,9 +61,28 @@ public class RecycleBinService {
                         .id(pr.getId())
                         .type("PROVIDER")
                         .name(pr.getName())
+                        .assignedTo("")
+                        .companyName("")
+                        .providerName(pr.getName())
+                        .insuranceTypeName("")
                         .description(pr.getContactInfo())
                         .deletedBy(pr.getDeletedBy())
                         .deletedAt(pr.getDeletedAt() != null ? pr.getDeletedAt().toString() : "")
+                        .build())
+        );
+
+        insuranceTypeRepository.findAllDeleted().forEach(it ->
+                items.add(RecycleBinItem.builder()
+                        .id(it.getId())
+                        .type("INSURANCE_TYPE")
+                        .name(it.getName())
+                        .assignedTo("")
+                        .companyName("")
+                        .providerName("")
+                        .insuranceTypeName(it.getName())
+                        .description(it.getDescription())
+                        .deletedBy(it.getDeletedBy())
+                        .deletedAt(it.getDeletedAt() != null ? it.getDeletedAt().toString() : "")
                         .build())
         );
 
@@ -65,8 +92,14 @@ public class RecycleBinService {
                         .type("PAYMENT")
                         .name("₹" + String.format("%.0f", pay.getAmount()))
                         .policyNumber(pay.getPolicy() != null ? pay.getPolicy().getPolicyNumber() : "")
+                        .assignedTo(pay.getPolicy() != null && pay.getPolicy().getUser() != null
+                                ? pay.getPolicy().getUser().getName() : "")
                         .companyName(pay.getPolicy() != null && pay.getPolicy().getCompany() != null
                                 ? pay.getPolicy().getCompany().getName() : "")
+                        .providerName(pay.getPolicy() != null && pay.getPolicy().getProvider() != null
+                                ? pay.getPolicy().getProvider().getName() : "")
+                        .insuranceTypeName(pay.getPolicy() != null && pay.getPolicy().getInsuranceType() != null
+                                ? pay.getPolicy().getInsuranceType().getName() : "")
                         .description("Due: " + pay.getDueDate())
                         .deletedBy(pay.getDeletedBy())
                         .deletedAt(pay.getDeletedAt() != null ? pay.getDeletedAt().toString() : "")
@@ -77,13 +110,13 @@ public class RecycleBinService {
         return items;
     }
 
-    // ─── Restore by id (try each repo) ───────────────────────
     @Transactional
     public void restore(String id) {
-        if (tryRestorePolicy(id))   return;
-        if (tryRestoreCompany(id))  return;
-        if (tryRestoreProvider(id)) return;
-        if (tryRestorePayment(id))  return;
+        if (tryRestorePolicy(id))       return;
+        if (tryRestoreCompany(id))      return;
+        if (tryRestoreProvider(id))     return;
+        if (tryRestorePayment(id))      return;
+        if (tryRestoreInsuranceType(id)) return;
         throw new RuntimeException("Item not found in recycle bin: " + id);
     }
 
@@ -111,7 +144,12 @@ public class RecycleBinService {
         }).orElse(false);
     }
 
-    // ─── Permanent delete by id ───────────────────────────────
+    private boolean tryRestoreInsuranceType(String id) {
+        return insuranceTypeRepository.findDeletedById(id).map(t -> {
+            t.restore(); insuranceTypeRepository.save(t); return true;
+        }).orElse(false);
+    }
+
     @Transactional
     public void permanentDelete(String id) {
         if (policyRepository.findDeletedById(id).isPresent()) {
@@ -126,15 +164,18 @@ public class RecycleBinService {
         if (paymentRepository.findDeletedById(id).isPresent()) {
             paymentRepository.deleteById(id); return;
         }
+        if (insuranceTypeRepository.findDeletedById(id).isPresent()) {
+            insuranceTypeRepository.deleteById(id); return;
+        }
         throw new RuntimeException("Item not found: " + id);
     }
 
-    // ─── Empty entire recycle bin ────────────────────────────
     @Transactional
     public void emptyRecycleBin() {
-        policyRepository.findAllDeleted().forEach(p -> policyRepository.deleteById(p.getId()));
-        companyRepository.findAllDeleted().forEach(c -> companyRepository.deleteById(c.getId()));
-        providerRepository.findAllDeleted().forEach(p -> providerRepository.deleteById(p.getId()));
-        paymentRepository.findAllDeleted().forEach(p -> paymentRepository.deleteById(p.getId()));
+        policyRepository.findAllDeleted().forEach(p       -> policyRepository.deleteById(p.getId()));
+        companyRepository.findAllDeleted().forEach(c      -> companyRepository.deleteById(c.getId()));
+        providerRepository.findAllDeleted().forEach(p     -> providerRepository.deleteById(p.getId()));
+        paymentRepository.findAllDeleted().forEach(p      -> paymentRepository.deleteById(p.getId()));
+        insuranceTypeRepository.findAllDeleted().forEach(t -> insuranceTypeRepository.deleteById(t.getId()));
     }
 }

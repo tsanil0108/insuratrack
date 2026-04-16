@@ -19,22 +19,22 @@ public class InsuranceTypeController {
 
     private final InsuranceTypeRepository repo;
 
-    // Get all active insurance types
+    // ─── Get all active (not deleted) insurance types ─────────────────────
     @GetMapping
     public ResponseEntity<List<InsuranceType>> getAll() {
-        List<InsuranceType> types = repo.findByActiveTrue();
+        List<InsuranceType> types = repo.findAllActive(); // ← FIXED
         return ResponseEntity.ok(types);
     }
 
-    // Get all insurance types (including inactive) - Admin only
+    // ─── Get all including inactive — Admin only ──────────────────────────
     @GetMapping("/all")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<InsuranceType>> getAllIncludingInactive() {
-        List<InsuranceType> types = repo.findAll();
+        List<InsuranceType> types = repo.findAllActive(); // ← only non-deleted
         return ResponseEntity.ok(types);
     }
 
-    // Get insurance type by ID
+    // ─── Get by ID ────────────────────────────────────────────────────────
     @GetMapping("/{id}")
     public ResponseEntity<InsuranceType> getById(@PathVariable String id) {
         Optional<InsuranceType> type = repo.findById(id);
@@ -42,16 +42,14 @@ public class InsuranceTypeController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Create new insurance type (Admin only)
+    // ─── Create — Admin only ──────────────────────────────────────────────
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<InsuranceType> create(@RequestBody InsuranceType type) {
-        // Validation
         if (type.getName() == null || type.getName().trim().isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
 
-        // Check if name already exists
         Optional<InsuranceType> existing = repo.findByNameIgnoreCase(type.getName());
         if (existing.isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -62,7 +60,7 @@ public class InsuranceTypeController {
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
-    // Update insurance type (Admin only)
+    // ─── Update — Admin only ──────────────────────────────────────────────
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<InsuranceType> update(@PathVariable String id,
@@ -80,7 +78,7 @@ public class InsuranceTypeController {
         return ResponseEntity.ok(repo.save(updated));
     }
 
-    // Soft delete insurance type (Admin only)
+    // ─── Soft delete — Admin only ─────────────────────────────────────────
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable String id) {
@@ -89,15 +87,15 @@ public class InsuranceTypeController {
             return ResponseEntity.notFound().build();
         }
 
-        // Soft delete - just set active to false
         InsuranceType type = existing.get();
         type.setActive(false);
+        type.softDelete("admin");
         repo.save(type);
 
         return ResponseEntity.ok().build();
     }
 
-    // Hard delete (Permanent) - Admin only
+    // ─── Hard delete — Admin only ─────────────────────────────────────────
     @DeleteMapping("/{id}/permanent")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> hardDelete(@PathVariable String id) {

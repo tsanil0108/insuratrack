@@ -2,27 +2,72 @@ package com.insuraTrack.service;
 
 import com.insuraTrack.model.Policy;
 import com.insuraTrack.model.PremiumPayment;
+import com.insuraTrack.model.User;
 import com.insuraTrack.repository.PolicyRepository;
 import com.insuraTrack.repository.PremiumPaymentRepository;
+import com.insuraTrack.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ExportService {
 
-    private final PolicyRepository        policyRepository;
+    private final PolicyRepository         policyRepository;
     private final PremiumPaymentRepository paymentRepository;
+    private final UserRepository           userRepository;
 
-    // ─── POLICIES CSV ────────────────────────────────────────
+    // ─── CURRENT USER ────────────────────────────────────────────────────────
+
+    private User getCurrentUser() {
+        String email = SecurityContextHolder.getContext()
+                .getAuthentication().getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    private boolean isAdmin(User user) {
+        return user.getRole().name().equalsIgnoreCase("ADMIN");
+    }
+
+    // ─── ROLE-BASED FILTERS ──────────────────────────────────────────────────
+
+    private List<Policy> getPoliciesForCurrentUser() {
+        User user = getCurrentUser();
+        return isAdmin(user)
+                ? policyRepository.findAllActive()
+                : policyRepository.findByUserAndDeletedFalse(user);
+    }
+
+    private List<PremiumPayment> getPaymentsForCurrentUser() {
+        User user = getCurrentUser();
+        if (isAdmin(user)) return paymentRepository.findAllActive();
+
+        // For USER role: only return payments belonging to their own policies
+        List<String> policyIds = policyRepository
+                .findByUserAndDeletedFalse(user)
+                .stream()
+                .map(Policy::getId)
+                .collect(Collectors.toList());
+
+        return paymentRepository.findAllActive()
+                .stream()
+                .filter(p -> policyIds.contains(p.getPolicy().getId()))
+                .collect(Collectors.toList());
+    }
+
+    // ─── POLICIES CSV ────────────────────────────────────────────────────────
+
     public byte[] exportPoliciesCsv() {
-        List<Policy> policies = policyRepository.findAll();
+        List<Policy> policies = getPoliciesForCurrentUser();
         StringBuilder sb = new StringBuilder();
         sb.append("Policy No,Company,Insurance Type,Provider,Premium,Sum Insured,Start Date,End Date,Status,Frequency\n");
         for (Policy p : policies) {
@@ -37,12 +82,13 @@ public class ExportService {
                     .append(p.getStatus()).append(",")
                     .append(p.getPremiumFrequency()).append("\n");
         }
-        return sb.toString().getBytes();
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    // ─── PAYMENTS CSV ────────────────────────────────────────
+    // ─── PAYMENTS CSV ────────────────────────────────────────────────────────
+
     public byte[] exportPaymentsCsv() {
-        List<PremiumPayment> payments = paymentRepository.findAllActive();
+        List<PremiumPayment> payments = getPaymentsForCurrentUser();
         StringBuilder sb = new StringBuilder();
         sb.append("Policy No,Company,Amount,Due Date,Paid Date,Status,Remarks\n");
         for (PremiumPayment p : payments) {
@@ -54,17 +100,20 @@ public class ExportService {
                     .append(p.getStatus()).append(",")
                     .append(csv(p.getRemarks())).append("\n");
         }
-        return sb.toString().getBytes();
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    // ─── POLICIES EXCEL ──────────────────────────────────────
+    // ─── POLICIES EXCEL ──────────────────────────────────────────────────────
+
     public byte[] exportPoliciesExcel() throws IOException {
-        List<Policy> policies = policyRepository.findAll();
+        List<Policy> policies = getPoliciesForCurrentUser();
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("Policies");
 
-            // Header
-            String[] headers = {"Policy No","Company","Insurance Type","Provider","Premium","Sum Insured","Start Date","End Date","Status","Frequency"};
+            String[] headers = {
+                    "Policy No", "Company", "Insurance Type", "Provider",
+                    "Premium", "Sum Insured", "Start Date", "End Date", "Status", "Frequency"
+            };
             Row headerRow = sheet.createRow(0);
             CellStyle hs = headerStyle(wb);
             for (int i = 0; i < headers.length; i++) {
@@ -73,7 +122,6 @@ public class ExportService {
                 cell.setCellStyle(hs);
             }
 
-            // Data
             int rowNum = 1;
             for (Policy p : policies) {
                 Row row = sheet.createRow(rowNum++);
@@ -97,13 +145,16 @@ public class ExportService {
         }
     }
 
-    // ─── PAYMENTS EXCEL ──────────────────────────────────────
+    // ─── PAYMENTS EXCEL ──────────────────────────────────────────────────────
+
     public byte[] exportPaymentsExcel() throws IOException {
-        List<PremiumPayment> payments = paymentRepository.findAllActive();
+        List<PremiumPayment> payments = getPaymentsForCurrentUser();
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("Payments");
 
-            String[] headers = {"Policy No","Company","Amount","Due Date","Paid Date","Status","Remarks"};
+            String[] headers = {
+                    "Policy No", "Company", "Amount", "Due Date", "Paid Date", "Status", "Remarks"
+            };
             Row headerRow = sheet.createRow(0);
             CellStyle hs = headerStyle(wb);
             for (int i = 0; i < headers.length; i++) {
@@ -132,11 +183,13 @@ public class ExportService {
         }
     }
 
-    // ─── POLICIES PDF ────────────────────────────────────────
+    // ─── POLICIES PDF ────────────────────────────────────────────────────────
+
     public byte[] exportPoliciesPdf() throws IOException {
-        List<Policy> policies = policyRepository.findAll();
+        List<Policy> policies = getPoliciesForCurrentUser();
         StringBuilder html = new StringBuilder();
-        html.append("<html><body><h2>Policies Report</h2><table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse;width:100%'>")
+        html.append("<html><body><h2>Policies Report</h2>")
+                .append("<table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse;width:100%'>")
                 .append("<tr style='background:#4f46e5;color:white'>")
                 .append("<th>Policy No</th><th>Company</th><th>Type</th><th>Provider</th>")
                 .append("<th>Premium</th><th>Status</th><th>Expiry</th></tr>");
@@ -152,16 +205,19 @@ public class ExportService {
                     .append("</tr>");
         }
         html.append("</table></body></html>");
-        return html.toString().getBytes();
+        return html.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    // ─── PAYMENTS PDF ────────────────────────────────────────
+    // ─── PAYMENTS PDF ────────────────────────────────────────────────────────
+
     public byte[] exportPaymentsPdf() throws IOException {
-        List<PremiumPayment> payments = paymentRepository.findAllActive();
+        List<PremiumPayment> payments = getPaymentsForCurrentUser();
         StringBuilder html = new StringBuilder();
-        html.append("<html><body><h2>Payments Report</h2><table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse;width:100%'>")
+        html.append("<html><body><h2>Payments Report</h2>")
+                .append("<table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse;width:100%'>")
                 .append("<tr style='background:#4f46e5;color:white'>")
-                .append("<th>Policy No</th><th>Company</th><th>Amount</th><th>Due Date</th><th>Paid Date</th><th>Status</th></tr>");
+                .append("<th>Policy No</th><th>Company</th><th>Amount</th>")
+                .append("<th>Due Date</th><th>Paid Date</th><th>Status</th></tr>");
         for (PremiumPayment p : payments) {
             html.append("<tr>")
                     .append("<td>").append(p.getPolicy().getPolicyNumber()).append("</td>")
@@ -173,13 +229,15 @@ public class ExportService {
                     .append("</tr>");
         }
         html.append("</table></body></html>");
-        return html.toString().getBytes();
+        return html.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    // ─── Helpers ─────────────────────────────────────────────
+    // ─── HELPERS ─────────────────────────────────────────────────────────────
+
     private String csv(String val) {
         if (val == null) return "";
-        if (val.contains(",") || val.contains("\"")) return "\"" + val.replace("\"", "\"\"") + "\"";
+        if (val.contains(",") || val.contains("\"") || val.contains("\n"))
+            return "\"" + val.replace("\"", "\"\"") + "\"";
         return val;
     }
 
@@ -187,6 +245,7 @@ public class ExportService {
         CellStyle style = wb.createCellStyle();
         Font font = wb.createFont();
         font.setBold(true);
+        font.setColor(IndexedColors.WHITE.getIndex());
         style.setFont(font);
         style.setFillForegroundColor(IndexedColors.INDIGO.getIndex());
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);

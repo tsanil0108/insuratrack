@@ -1,5 +1,6 @@
 package com.insuraTrack.service;
 
+import com.insuraTrack.dto.CreateReminderRequest;
 import com.insuraTrack.dto.ReminderResponse;
 import com.insuraTrack.enums.ReminderType;
 import com.insuraTrack.model.Policy;
@@ -9,143 +10,252 @@ import com.insuraTrack.repository.PolicyRepository;
 import com.insuraTrack.repository.PremiumPaymentRepository;
 import com.insuraTrack.repository.ReminderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
+@Slf4j
 public class ReminderService {
 
     private final ReminderRepository reminderRepository;
     private final PolicyRepository policyRepository;
     private final PremiumPaymentRepository paymentRepository;
+    private final NotificationService notificationService;
 
-    // ==================== CONTROLLER REQUIRED METHODS ====================
+    // ==================== ACTIVE ====================
 
-    // Get all active reminders (not dismissed)
     public List<ReminderResponse> getActiveReminders() {
-        return reminderRepository.findAll().stream()
-                .filter(reminder -> !reminder.isDismissed())
+        return reminderRepository.findByDismissedFalseOrderByReminderDateAsc()
+                .stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
 
-    // Get reminders by policy ID
+    public List<ReminderResponse> getActiveRemindersByUsername(String username) {
+        return reminderRepository.findByDismissedFalseOrderByReminderDateAsc()
+                .stream()
+                .filter(r -> r.getPolicy() != null &&
+                        r.getPolicy().getUser() != null &&
+                        r.getPolicy().getUser().getEmail().equals(username))
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
+    // ==================== DISMISSED ====================
+
+    public List<ReminderResponse> getDismissedReminders() {
+        return reminderRepository.findByDismissedTrueOrderByReminderDateDesc()
+                .stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<ReminderResponse> getDismissedRemindersByUsername(String username) {
+        return reminderRepository.findByDismissedTrueOrderByReminderDateDesc()
+                .stream()
+                .filter(r -> r.getPolicy() != null &&
+                        r.getPolicy().getUser() != null &&
+                        r.getPolicy().getUser().getEmail().equals(username))
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
+    // ==================== BY POLICY ====================
+
     public List<ReminderResponse> getRemindersByPolicy(String policyId) {
-        return reminderRepository.findAll().stream()
-                .filter(reminder -> reminder.getPolicy() != null &&
-                        reminder.getPolicy().getId().equals(policyId))
+        return reminderRepository.findByPolicyId(policyId)
+                .stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
 
-    // Dismiss a single reminder
+    // ==================== ACTIONS ====================
+
     public ReminderResponse dismissReminder(String id) {
         Reminder reminder = reminderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Reminder not found"));
+                .orElseThrow(() -> new RuntimeException("Reminder not found: " + id));
         reminder.setDismissed(true);
         reminder = reminderRepository.save(reminder);
+        log.info("Reminder dismissed: {}", id);
         return convertToResponse(reminder);
     }
 
-    // Dismiss all reminders for a policy
-    public void dismissAllByPolicy(String policyId) {
-        List<Reminder> reminders = reminderRepository.findAll().stream()
-                .filter(reminder -> reminder.getPolicy() != null &&
-                        reminder.getPolicy().getId().equals(policyId) &&
-                        !reminder.isDismissed())
-                .toList();
-
-        for (Reminder reminder : reminders) {
-            reminder.setDismissed(true);
-            reminderRepository.save(reminder);
-        }
+    public ReminderResponse restoreReminder(String id) {
+        Reminder reminder = reminderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reminder not found: " + id));
+        reminder.setDismissed(false);
+        reminder = reminderRepository.save(reminder);
+        log.info("Reminder restored: {}", id);
+        return convertToResponse(reminder);
     }
 
-    // ==================== SCHEDULER METHODS ====================
+    public void permanentDeleteReminder(String id) {
+        Reminder reminder = reminderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reminder not found: " + id));
+        reminderRepository.delete(reminder);
+        log.info("Reminder permanently deleted: {}", id);
+    }
 
-    // Generate expiry reminders for policies expiring in next 7 days
+    public void dismissAllByPolicy(String policyId) {
+        List<Reminder> reminders = reminderRepository.findByPolicyId(policyId)
+                .stream()
+                .filter(r -> !r.isDismissed())
+                .collect(Collectors.toList());
+        reminders.forEach(r -> r.setDismissed(true));
+        reminderRepository.saveAll(reminders);
+        log.info("Dismissed {} reminders for policy: {}", reminders.size(), policyId);
+    }
+
+    public ReminderResponse createManualReminder(CreateReminderRequest request) {
+        Policy policy = policyRepository.findActiveById(request.getPolicyId())
+                .orElseThrow(() -> new RuntimeException("Policy not found: " + request.getPolicyId()));
+
+        boolean exists = reminderRepository.existsByPolicyIdAndMessageAndDismissedFalse(
+                policy.getId(), request.getMessage());
+        if (exists) {
+            throw new RuntimeException("A similar reminder already exists for this policy");
+        }
+
+        Reminder reminder = Reminder.builder()
+                .policy(policy)
+                .reminderDate(request.getReminderDate())
+                .type(request.getType())
+                .message(request.getMessage())
+                .severity(request.getSeverity() != null ? request.getSeverity() : "MEDIUM")
+                .sent(false)
+                .dismissed(false)
+                .build();
+
+        reminder = reminderRepository.save(reminder);
+        log.info("Manual reminder created for policy: {}", policy.getPolicyNumber());
+
+        if (policy.getUser() != null) {
+            notificationService.createNotificationForUser(
+                    policy.getUser(),
+                    "New Reminder: " + request.getType().name(),
+                    request.getMessage(),
+                    request.getType().name()
+            );
+        }
+
+        return convertToResponse(reminder);
+    }
+
+    // ==================== SCHEDULER ====================
+
     public void generateExpiryReminders() {
         LocalDate today = LocalDate.now();
-        LocalDate sevenDaysLater = today.plusDays(7);
+        LocalDate thirtyDaysLater = today.plusDays(30);
+        List<Policy> expiringPolicies = policyRepository.findExpiringSoon(today, thirtyDaysLater);
 
-        List<Policy> expiringPolicies = policyRepository.findAll().stream()
-                .filter(policy -> policy.getEndDate() != null &&
-                        policy.getEndDate().isAfter(today) &&
-                        policy.getEndDate().isBefore(sevenDaysLater) &&
-                        policy.getStatus() != com.insuraTrack.enums.PolicyStatus.EXPIRED)
-                .toList();
+        int expiryCount = 0;
+        int notificationCount = 0;
 
         for (Policy policy : expiringPolicies) {
-            boolean reminderExists = reminderRepository.findAll().stream()
-                    .anyMatch(r -> r.getPolicy() != null &&
-                            r.getPolicy().getId().equals(policy.getId()) &&
-                            r.getType() == ReminderType.EXPIRY &&
-                            !r.isDismissed());
+            long daysLeft = ChronoUnit.DAYS.between(today, policy.getEndDate());
+            String severity = getSeverity(policy.getEndDate());
+            String message = String.format("⚠️ Policy %s is expiring on %s (%d days left)",
+                    policy.getPolicyNumber(), policy.getEndDate(), daysLeft);
+
+            boolean reminderExists = reminderRepository
+                    .existsByPolicyIdAndMessageAndDismissedFalse(policy.getId(), message);
 
             if (!reminderExists) {
+                LocalDate reminderDate = daysLeft <= 7 ? today : policy.getEndDate().minusDays(7);
+
                 Reminder reminder = Reminder.builder()
                         .policy(policy)
-                        .reminderDate(policy.getEndDate().minusDays(3))
+                        .reminderDate(reminderDate)
                         .type(ReminderType.EXPIRY)
-                        .message("Your policy " + policy.getPolicyNumber() + " is expiring on " + policy.getEndDate())
-                        .severity(getSeverity(policy.getEndDate()))
+                        .message(message)
+                        .severity(severity)
                         .sent(false)
                         .dismissed(false)
                         .build();
 
                 reminderRepository.save(reminder);
-                System.out.println("Expiry reminder generated for policy: " + policy.getPolicyNumber());
+                expiryCount++;
+
+                if (policy.getUser() != null) {
+                    notificationService.createNotificationForUser(
+                            policy.getUser(),
+                            "Policy Expiry Alert",
+                            message,
+                            "EXPIRY"
+                    );
+                    notificationCount++;
+                }
+
+                log.info("Expiry reminder generated for policy: {}", policy.getPolicyNumber());
             }
         }
+
+        log.info("Generated {} expiry reminders, {} notifications", expiryCount, notificationCount);
     }
 
-    // Generate payment reminders for unpaid payments due in next 7 days
     public void generatePaymentReminders() {
         LocalDate today = LocalDate.now();
-        LocalDate sevenDaysLater = today.plusDays(7);
+        LocalDate fifteenDaysLater = today.plusDays(15);
+        List<PremiumPayment> upcomingPayments = paymentRepository.findUpcoming(fifteenDaysLater);
 
-        List<PremiumPayment> unpaidPayments = paymentRepository.findAll().stream()
-                .filter(payment -> payment.getStatus() == com.insuraTrack.enums.PaymentStatus.UNPAID &&
-                        payment.getDueDate() != null &&
-                        payment.getDueDate().isAfter(today) &&
-                        payment.getDueDate().isBefore(sevenDaysLater))
-                .toList();
+        int paymentCount = 0;
+        int notificationCount = 0;
 
-        for (PremiumPayment payment : unpaidPayments) {
-            boolean reminderExists = reminderRepository.findAll().stream()
-                    .anyMatch(r -> r.getPolicy() != null &&
-                            r.getPolicy().getId().equals(payment.getPolicy().getId()) &&
-                            r.getType() == ReminderType.PAYMENT &&
-                            !r.isDismissed());
+        for (PremiumPayment payment : upcomingPayments) {
+            long daysLeft = ChronoUnit.DAYS.between(today, payment.getDueDate());
+            String severity = daysLeft <= 3 ? "HIGH" : (daysLeft <= 7 ? "MEDIUM" : "LOW");
+            String message = String.format("💰 Payment of ₹%.2f for policy %s is due on %s (%d days left)",
+                    payment.getAmount(), payment.getPolicy().getPolicyNumber(),
+                    payment.getDueDate(), daysLeft);
+
+            boolean reminderExists = reminderRepository
+                    .existsByPolicyIdAndMessageAndDismissedFalse(payment.getPolicy().getId(), message);
 
             if (!reminderExists) {
+                LocalDate reminderDate = daysLeft <= 3 ? today : payment.getDueDate().minusDays(3);
+
                 Reminder reminder = Reminder.builder()
                         .policy(payment.getPolicy())
-                        .reminderDate(payment.getDueDate().minusDays(3))
+                        .reminderDate(reminderDate)
                         .type(ReminderType.PAYMENT)
-                        .message("Payment of ₹" + payment.getAmount() + " is due for policy " +
-                                payment.getPolicy().getPolicyNumber() + " on " + payment.getDueDate())
-                        .severity("HIGH")
+                        .message(message)
+                        .severity(severity)
                         .sent(false)
                         .dismissed(false)
                         .build();
 
                 reminderRepository.save(reminder);
-                System.out.println("Payment reminder generated for policy: " + payment.getPolicy().getPolicyNumber());
+                paymentCount++;
+
+                if (payment.getPolicy().getUser() != null) {
+                    notificationService.createNotificationForUser(
+                            payment.getPolicy().getUser(),
+                            "Payment Due Reminder",
+                            message,
+                            "PAYMENT"
+                    );
+                    notificationCount++;
+                }
+
+                log.info("Payment reminder generated for policy: {}", payment.getPolicy().getPolicyNumber());
             }
         }
+
+        log.info("Generated {} payment reminders, {} notifications", paymentCount, notificationCount);
     }
 
-    // ==================== HELPER METHODS ====================
+    // ==================== HELPERS ====================
 
     private String getSeverity(LocalDate expiryDate) {
-        LocalDate today = LocalDate.now();
-        long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(today, expiryDate);
-
+        long daysLeft = ChronoUnit.DAYS.between(LocalDate.now(), expiryDate);
         if (daysLeft <= 7) return "HIGH";
         if (daysLeft <= 15) return "MEDIUM";
         return "LOW";

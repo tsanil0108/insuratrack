@@ -4,9 +4,11 @@ import com.insuraTrack.dto.PaymentDTO;
 import com.insuraTrack.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -29,6 +31,12 @@ public class PaymentController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<List<PaymentDTO>> getMyPayments() {
         return ResponseEntity.ok(paymentService.getMyPayments());
+    }
+
+    @GetMapping("/pending-verification")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<PaymentDTO>> getPendingVerification() {
+        return ResponseEntity.ok(paymentService.getPendingVerification());
     }
 
     @GetMapping("/policy/{policyId}")
@@ -63,6 +71,41 @@ public class PaymentController {
         LocalDate dueDate = LocalDate.parse(body.get("dueDate"));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(paymentService.createPayment(policyId, amount, dueDate));
+    }
+
+    // FIXED: Added consumes attribute
+    @PostMapping(value = "/{id}/upload-slip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")  // Allow both roles
+    public ResponseEntity<PaymentDTO> uploadPaymentSlip(
+            @PathVariable String id,
+            @RequestParam("slip") MultipartFile slip,
+            @RequestParam(value = "reference", required = false) String reference,
+            @RequestParam(value = "paymentMethod", required = false) String paymentMethod) {
+        return ResponseEntity.ok(paymentService.uploadPaymentSlip(id, slip, reference, paymentMethod));
+    }
+
+    @PutMapping("/{id}/verify-payment")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PaymentDTO> verifyPayment(
+            @PathVariable String id,
+            @RequestBody Map<String, String> body) {
+        String adminRemarks = body.get("adminRemarks");
+        return ResponseEntity.ok(paymentService.verifyPayment(id, adminRemarks));
+    }
+
+    @PutMapping("/{id}/reject-payment")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PaymentDTO> rejectPayment(
+            @PathVariable String id,
+            @RequestBody Map<String, String> body) {
+        String rejectionReason = body.get("rejectionReason");
+        return ResponseEntity.ok(paymentService.rejectPayment(id, rejectionReason));
+    }
+
+    @GetMapping("/{id}/slip")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    public ResponseEntity<byte[]> getPaymentSlip(@PathVariable String id) {
+        return paymentService.getPaymentSlip(id);
     }
 
     @PutMapping("/{id}/pay")

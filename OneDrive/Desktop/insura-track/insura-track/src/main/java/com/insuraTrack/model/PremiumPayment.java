@@ -28,4 +28,17 @@ public class PremiumPayment extends BaseEntity {
     private PaymentStatus status;
 
     private String remarks;
+
+    // New fields for payment slip
+    @Column(length = 500)
+    private String paymentSlipUrl;  // URL/path to uploaded payment slip
+
+    private String paymentReference; // Transaction/Reference number
+
+    private String paymentMethod;    // UPI, Bank Transfer, Credit Card, etc.
+
+    private LocalDate paymentVerifiedDate; // When admin verified the payment
+
+    @Column(length = 500)
+    private String adminRemarks; // Admin remarks on payment verification
 }

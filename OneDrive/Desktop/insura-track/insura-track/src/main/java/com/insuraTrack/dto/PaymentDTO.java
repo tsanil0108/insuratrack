@@ -17,4 +17,11 @@ public class PaymentDTO {
     private LocalDate paidDate;
     private PaymentStatus status;
     private String remarks;
+
+    // New fields
+    private String paymentSlipUrl;
+    private String paymentReference;
+    private String paymentMethod;
+    private LocalDate paymentVerifiedDate;
+    private String adminRemarks;
 }

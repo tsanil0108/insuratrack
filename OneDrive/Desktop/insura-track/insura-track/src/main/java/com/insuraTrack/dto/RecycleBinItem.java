@@ -7,10 +7,13 @@ import lombok.Data;
 @Builder
 public class RecycleBinItem {
     private String id;
-    private String type;          // POLICY, COMPANY, PAYMENT, PROVIDER
-    private String name;          // display name
+    private String type;
+    private String name;
     private String policyNumber;
+    private String assignedTo;
     private String companyName;
+    private String providerName;
+    private String insuranceTypeName;   // ← NEW
     private String description;
     private String deletedBy;
     private String deletedAt;

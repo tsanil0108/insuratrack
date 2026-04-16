@@ -1,7 +1,5 @@
 package com.insuraTrack.controller;
 
-import com.insuraTrack.model.Policy;
-import com.insuraTrack.repository.PolicyRepository;
 import com.insuraTrack.service.PaymentService;
 import com.insuraTrack.service.PolicyService;
 import com.insuraTrack.service.ReminderService;
@@ -9,9 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDate;
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -21,9 +16,7 @@ public class ReminderScheduler {
     private final PolicyService policyService;
     private final PaymentService paymentService;
     private final ReminderService reminderService;
-    private final PolicyRepository policyRepository;
 
-    // Every day at 8 AM
     @Scheduled(cron = "0 0 8 * * *")
     public void runDailyJobs() {
         log.info("Running daily scheduler jobs...");
@@ -32,6 +25,7 @@ public class ReminderScheduler {
         markOverduePayments();
         generateExpiryReminders();
         generatePaymentReminders();
+        log.info("Daily scheduler jobs completed.");
     }
 
     private void updateExpiredPolicies() {
@@ -56,6 +50,6 @@ public class ReminderScheduler {
 
     private void generatePaymentReminders() {
         reminderService.generatePaymentReminders();
-        log.info("Payment reminders generated.");
+        log.info("Payment reminders generated."); // was missing
     }
 }

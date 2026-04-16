@@ -18,11 +18,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PolicyService {
 
-    private final PolicyRepository policyRepository;
-    private final CompanyRepository companyRepository;
-    private final InsuranceTypeRepository insuranceTypeRepository;
+    private final PolicyRepository            policyRepository;
+    private final CompanyRepository           companyRepository;
+    private final InsuranceTypeRepository     insuranceTypeRepository;
     private final InsuranceProviderRepository providerRepository;
-    private final UserRepository userRepository;
+    private final UserRepository              userRepository;
 
     // ─── CURRENT USER ────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ public class PolicyService {
 
     @Transactional(readOnly = true)
     public PolicyResponse getByIdSecure(String id) {
-        Policy policy = policyRepository.findById(id)
+        Policy policy = policyRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Policy not found"));
 
         User currentUser = getCurrentUser();
@@ -95,7 +95,6 @@ public class PolicyService {
         InsuranceProvider provider = providerRepository.findById(request.getProviderId())
                 .orElseThrow(() -> new RuntimeException("Provider not found"));
 
-        // If admin provided a userId, assign that user; otherwise assign current user
         User user;
         if (request.getUserId() != null && !request.getUserId().isBlank()) {
             user = userRepository.findById(request.getUserId())
@@ -127,7 +126,7 @@ public class PolicyService {
 
     @Transactional
     public PolicyResponse update(String id, PolicyRequest request) {
-        Policy policy = policyRepository.findById(id)
+        Policy policy = policyRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Policy not found"));
 
         Company company = companyRepository.findById(request.getCompanyId())
@@ -151,7 +150,6 @@ public class PolicyService {
         policy.setPremiumFrequency(request.getPremiumFrequency());
         policy.setHypothecation(request.isHypothecation());
 
-        // Allow admin to reassign user
         if (request.getUserId() != null && !request.getUserId().isBlank()) {
             User user = userRepository.findById(request.getUserId())
                     .orElseThrow(() -> new RuntimeException("User not found: " + request.getUserId()));
@@ -165,9 +163,10 @@ public class PolicyService {
 
     @Transactional
     public void delete(String id) {
-        Policy policy = policyRepository.findById(id)
+        Policy policy = policyRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Policy not found"));
-        policy.softDelete("admin");
+        String deletedBy = getCurrentUser().getName();
+        policy.softDelete(deletedBy);
         policyRepository.save(policy);
     }
 
@@ -186,7 +185,7 @@ public class PolicyService {
     @Transactional
     public void updateExpiringSoonStatus() {
         LocalDate today = LocalDate.now();
-        LocalDate soon = today.plusDays(30);
+        LocalDate soon  = today.plusDays(30);
         policyRepository.findExpiringSoon(today, soon)
                 .forEach(p -> {
                     if (p.getStatus() == PolicyStatus.ACTIVE) {

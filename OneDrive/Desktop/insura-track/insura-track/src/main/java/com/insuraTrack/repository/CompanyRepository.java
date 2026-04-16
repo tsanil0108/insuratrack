@@ -10,14 +10,16 @@ import java.util.Optional;
 
 public interface CompanyRepository extends JpaRepository<Company, String> {
 
-    // Active only
     List<Company> findByActiveTrueAndDeletedFalse();
 
     default List<Company> findByActiveTrue() {
         return findByActiveTrueAndDeletedFalse();
     }
 
-    // Soft delete support
+    // ✅ ADD THIS METHOD
+    @Query("SELECT c FROM Company c WHERE c.id = :id AND c.deleted = false")
+    Optional<Company> findActiveById(@Param("id") String id);
+
     @Query("SELECT c FROM Company c WHERE c.deleted = true")
     List<Company> findAllDeleted();
 

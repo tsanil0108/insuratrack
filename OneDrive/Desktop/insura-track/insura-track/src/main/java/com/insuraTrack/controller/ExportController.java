@@ -11,12 +11,13 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/export")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'USER')")
 public class ExportController {
 
     private final ExportService exportService;
 
-    // ─── Policies ────────────────────────────────────────────
+    // ─── Policies ────────────────────────────────────────────────────────────
+
     @GetMapping("/policies/csv")
     public ResponseEntity<byte[]> policiesCsv() throws Exception {
         byte[] data = exportService.exportPoliciesCsv();
@@ -31,7 +32,8 @@ public class ExportController {
         byte[] data = exportService.exportPoliciesExcel();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=policies.xlsx")
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(data);
     }
 
@@ -44,7 +46,8 @@ public class ExportController {
                 .body(data);
     }
 
-    // ─── Payments ────────────────────────────────────────────
+    // ─── Payments ────────────────────────────────────────────────────────────
+
     @GetMapping("/payments/csv")
     public ResponseEntity<byte[]> paymentsCsv() throws Exception {
         byte[] data = exportService.exportPaymentsCsv();
@@ -59,7 +62,8 @@ public class ExportController {
         byte[] data = exportService.exportPaymentsExcel();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payments.xlsx")
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(data);
     }
 

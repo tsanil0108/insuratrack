@@ -1,6 +1,8 @@
 package com.insuraTrack.enums;
 
 public enum ReminderType {
-    EXPIRY,
-    PAYMENT
+    PAYMENT,          // "Payment Due"
+    EXPIRY,           // "Policy Expiry"
+    RENEWAL,          // "Renewal Reminder"
+    GENERAL           // "General"
 }

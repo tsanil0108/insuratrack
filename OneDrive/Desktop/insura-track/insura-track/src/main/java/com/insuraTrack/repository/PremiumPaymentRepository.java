@@ -16,6 +16,7 @@ public interface PremiumPaymentRepository extends JpaRepository<PremiumPayment, 
         JOIN FETCH pp.policy p
         JOIN FETCH p.company
         JOIN FETCH p.provider
+        LEFT JOIN FETCH p.user
         WHERE pp.policy.id = :policyId AND pp.deleted = false
     """)
     List<PremiumPayment> findByPolicyId(@Param("policyId") String policyId);
@@ -25,6 +26,7 @@ public interface PremiumPaymentRepository extends JpaRepository<PremiumPayment, 
         JOIN FETCH pp.policy p
         JOIN FETCH p.company
         JOIN FETCH p.provider
+        LEFT JOIN FETCH p.user
         WHERE pp.deleted = false
     """)
     List<PremiumPayment> findAllActive();
@@ -34,6 +36,7 @@ public interface PremiumPaymentRepository extends JpaRepository<PremiumPayment, 
         JOIN FETCH pp.policy p
         JOIN FETCH p.company
         JOIN FETCH p.provider
+        LEFT JOIN FETCH p.user
         WHERE pp.status = 'UNPAID' AND pp.dueDate < :today AND pp.deleted = false
     """)
     List<PremiumPayment> findOverdue(@Param("today") LocalDate today);
@@ -43,6 +46,7 @@ public interface PremiumPaymentRepository extends JpaRepository<PremiumPayment, 
         JOIN FETCH pp.policy p
         JOIN FETCH p.company
         JOIN FETCH p.provider
+        LEFT JOIN FETCH p.user
         WHERE pp.status = 'UNPAID' AND pp.dueDate = :dueDate AND pp.deleted = false
     """)
     List<PremiumPayment> findUnpaidByDueDate(@Param("dueDate") LocalDate dueDate);
@@ -52,6 +56,7 @@ public interface PremiumPaymentRepository extends JpaRepository<PremiumPayment, 
         JOIN FETCH pp.policy p
         JOIN FETCH p.company
         JOIN FETCH p.provider
+        LEFT JOIN FETCH p.user
         WHERE pp.id = :id AND pp.deleted = false
     """)
     Optional<PremiumPayment> findActiveById(@Param("id") String id);
@@ -70,6 +75,10 @@ public interface PremiumPaymentRepository extends JpaRepository<PremiumPayment, 
     @Query("SELECT COALESCE(SUM(pp.amount), 0) FROM PremiumPayment pp WHERE pp.deleted = false")
     Double sumTotalAmount();
 
+    // ADD THIS MISSING METHOD:
+    @Query("SELECT COUNT(pp) FROM PremiumPayment pp WHERE pp.status = 'PENDING_VERIFICATION' AND pp.deleted = false")
+    Long countPendingVerification();
+
     @Query("SELECT pp.policy.provider.name, SUM(pp.amount) FROM PremiumPayment pp WHERE pp.deleted = false GROUP BY pp.policy.provider.name")
     List<Object[]> sumByProvider();
 
@@ -85,9 +94,27 @@ public interface PremiumPaymentRepository extends JpaRepository<PremiumPayment, 
 
     // ─── Soft delete support ─────────────────────────────────────────────────
 
-    @Query("SELECT pp FROM PremiumPayment pp WHERE pp.deleted = true")
+    @Query("""
+        SELECT pp FROM PremiumPayment pp
+        JOIN FETCH pp.policy p
+        LEFT JOIN FETCH p.company
+        LEFT JOIN FETCH p.provider
+        LEFT JOIN FETCH p.user
+        WHERE pp.deleted = true
+    """)
     List<PremiumPayment> findAllDeleted();
 
-    @Query("SELECT pp FROM PremiumPayment pp WHERE pp.id = :id AND pp.deleted = true")
+    @Query("""
+        SELECT pp FROM PremiumPayment pp
+        JOIN FETCH pp.policy p
+        LEFT JOIN FETCH p.company
+        LEFT JOIN FETCH p.provider
+        LEFT JOIN FETCH p.user
+        WHERE pp.id = :id AND pp.deleted = true
+    """)
     Optional<PremiumPayment> findDeletedById(@Param("id") String id);
+
+    // Add this method to PremiumPaymentRepository
+    @Query("SELECT pp FROM PremiumPayment pp WHERE pp.dueDate <= :date AND pp.status = 'UNPAID' AND pp.deleted = false")
+    List<PremiumPayment> findUpcoming(@Param("date") LocalDate date);
 }

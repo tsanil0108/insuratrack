@@ -16,6 +16,10 @@ public interface InsuranceProviderRepository extends JpaRepository<InsuranceProv
         return findByActiveTrueAndDeletedFalse();
     }
 
+    // ✅ ADD THESE METHODS
+    @Query("SELECT p FROM InsuranceProvider p WHERE p.id = :id AND p.deleted = false")
+    Optional<InsuranceProvider> findActiveById(@Param("id") String id);
+
     // Soft delete support
     @Query("SELECT p FROM InsuranceProvider p WHERE p.deleted = true")
     List<InsuranceProvider> findAllDeleted();
