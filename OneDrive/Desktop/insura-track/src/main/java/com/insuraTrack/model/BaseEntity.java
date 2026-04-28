@@ -1,5 +1,6 @@
 package com.insuraTrack.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -8,9 +9,9 @@ import org.hibernate.annotations.UuidGenerator;
 import java.time.LocalDateTime;
 
 @MappedSuperclass
-@Getter @Setter
-
-
+@Getter
+@Setter
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public abstract class BaseEntity {
 
     @Id
@@ -23,9 +24,7 @@ public abstract class BaseEntity {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-
-
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean deleted = false;
 
     @Column(name = "deleted_at")
@@ -38,6 +37,7 @@ public abstract class BaseEntity {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        deleted = false;
     }
 
     @PreUpdate

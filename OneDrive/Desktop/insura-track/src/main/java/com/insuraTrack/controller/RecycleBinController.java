@@ -22,7 +22,8 @@ public class RecycleBinController {
         return recycleBinService.getAllDeleted();
     }
 
-    @PutMapping("/{id}/restore")
+    // FIX: changed from @PutMapping to @PostMapping to match frontend api.post call
+    @PostMapping("/{id}/restore")
     public ResponseEntity<Void> restore(@PathVariable String id) {
         recycleBinService.restore(id);
         return ResponseEntity.ok().build();

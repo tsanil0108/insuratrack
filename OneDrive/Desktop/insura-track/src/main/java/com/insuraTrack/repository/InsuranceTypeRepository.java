@@ -1,7 +1,9 @@
 package com.insuraTrack.repository;
 
 import com.insuraTrack.model.InsuranceType;
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -12,20 +14,37 @@ import java.util.Optional;
 @Repository
 public interface InsuranceTypeRepository extends JpaRepository<InsuranceType, String> {
 
-    List<InsuranceType> findByActiveTrue();
+    // Get all active (not deleted) insurance types
+    List<InsuranceType> findAllByDeletedFalseAndActiveTrue();
 
-    Optional<InsuranceType> findByNameIgnoreCase(String name);
+    // Get all non-deleted insurance types
+    List<InsuranceType> findAllByDeletedFalse();
 
-    List<InsuranceType> findByNameContainingIgnoreCase(String name);
+    // Get all deleted insurance types
+    List<InsuranceType> findAllByDeletedTrue();
 
-    // ─── Soft delete support ──────────────────────────────────────────────
+    // Find by name (case insensitive) where not deleted
+    Optional<InsuranceType> findByNameIgnoreCaseAndDeletedFalse(String name);
 
-    @Query("SELECT t FROM InsuranceType t WHERE t.deleted = false")
-    List<InsuranceType> findAllActive();
+    // ✅ ADD THIS: Find by name (case insensitive) where deleted = true
+    Optional<InsuranceType> findByNameIgnoreCaseAndDeletedTrue(String name);
 
-    @Query("SELECT t FROM InsuranceType t WHERE t.deleted = true")
-    List<InsuranceType> findAllDeleted();
+    // Check if exists by name (case insensitive) where not deleted
+    boolean existsByNameIgnoreCaseAndDeletedFalse(String name);
 
-    @Query("SELECT t FROM InsuranceType t WHERE t.id = :id AND t.deleted = true")
-    Optional<InsuranceType> findDeletedById(@Param("id") String id);
+    // Check if exists by name (case insensitive) where deleted = true
+    boolean existsByNameIgnoreCaseAndDeletedTrue(String name);
+
+    // Search by name containing keyword
+    List<InsuranceType> findByNameContainingIgnoreCaseAndDeletedFalse(String keyword);
+
+    // Count active insurance types
+    long countByDeletedFalseAndActiveTrue();
+
+    // Restore a soft-deleted insurance type
+    @Modifying
+    @Transactional
+    @Query("UPDATE InsuranceType it SET it.deleted = false, it.active = true, it.deletedBy = null, it.deletedAt = null, it.updatedAt = CURRENT_TIMESTAMP WHERE it.id = :id")
+    void restoreById(@Param("id") String id);
+
 }

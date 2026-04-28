@@ -1,6 +1,5 @@
 package com.insuraTrack.service;
 
-
 import com.insuraTrack.model.User;
 import com.insuraTrack.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,8 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(email)
+        // FIXED: Use findByEmailAndDeletedFalse instead of findByEmail
+        User user = userRepository.findByEmailAndDeletedFalse(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
 
         return org.springframework.security.core.userdetails.User

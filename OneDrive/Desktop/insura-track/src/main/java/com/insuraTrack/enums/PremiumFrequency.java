@@ -5,5 +5,6 @@ public enum PremiumFrequency {
     QUARTERLY,
     HALF_YEARLY,
     ANNUALLY,
-    YEARLY  // kept for backward compatibility if any existing DB data uses it
+    YEARLY,
+    ONETIMEPAYMENT
 }

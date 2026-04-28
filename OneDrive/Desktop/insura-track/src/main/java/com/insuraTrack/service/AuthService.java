@@ -27,20 +27,36 @@ public class AuthService {
 
     // 🔐 LOGIN
     public AuthResponse login(AuthRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
 
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        // ✅ Step 1: Check if email exists — specific message
+        // FIXED: Use findByEmailAndDeletedFalse instead of findByEmail
+        User user = userRepository.findByEmailAndDeletedFalse(request.getEmail().toLowerCase().trim())
+                .orElseThrow(() -> new RuntimeException("No account found with this email address."));
 
+        // ✅ Step 2: Check account active status before auth attempt
         if (!user.isActive()) {
-            throw new RuntimeException("Account disabled");
+            throw new RuntimeException("Your account has been disabled. Please contact the administrator.");
         }
 
+        // ✅ Step 3: Authenticate and catch Spring Security exceptions with proper messages
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail().toLowerCase().trim(),
+                            request.getPassword()
+                    )
+            );
+        } catch (BadCredentialsException e) {
+            throw new RuntimeException("Incorrect password. Please try again.");
+        } catch (DisabledException e) {
+            throw new RuntimeException("Your account has been disabled. Please contact the administrator.");
+        } catch (LockedException e) {
+            throw new RuntimeException("Your account is locked. Please contact the administrator.");
+        } catch (Exception e) {
+            throw new RuntimeException("Login failed. Please try again.");
+        }
+
+        // ✅ Step 4: Generate JWT token
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         String token = jwtService.generateToken(userDetails);
 
@@ -54,22 +70,18 @@ public class AuthService {
 
     // 🔐 REGISTER
     public AuthResponse register(RegisterRequest request) {
-        // Check if email already exists
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already registered");
+        if (userRepository.existsByEmail(request.getEmail().toLowerCase().trim())) {
+            throw new RuntimeException("This email is already registered. Please login instead.");
         }
 
-        // Validate password
         if (request.getPassword() == null || request.getPassword().length() < 6) {
-            throw new RuntimeException("Password must be at least 6 characters");
+            throw new RuntimeException("Password must be at least 6 characters.");
         }
 
-        // Validate name
         if (request.getName() == null || request.getName().trim().isEmpty()) {
-            throw new RuntimeException("Name is required");
+            throw new RuntimeException("Name is required.");
         }
 
-        // Determine role
         Role role;
         if (request.getAdminKey() != null && !request.getAdminKey().isEmpty()
                 && adminSecret.equals(request.getAdminKey())) {
@@ -78,7 +90,6 @@ public class AuthService {
             role = Role.USER;
         }
 
-        // Create user
         User user = User.builder()
                 .name(request.getName().trim())
                 .email(request.getEmail().toLowerCase().trim())
@@ -89,7 +100,6 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        // Generate token
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         String token = jwtService.generateToken(userDetails);
 
@@ -103,12 +113,9 @@ public class AuthService {
 
     // 🔐 LOGOUT
     public void logout(String token) {
-        // Remove "Bearer " prefix if present
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
         }
-        // Add token to blacklist or invalidate session
-        // For now, this is a placeholder
-        // You can implement token blacklisting using Redis or in-memory cache
+        // Token blacklisting — implement with Redis if needed
     }
 }

@@ -1,136 +1,101 @@
 package com.insuraTrack.controller;
 
-import com.insuraTrack.dto.UserDTO;
 import com.insuraTrack.model.User;
-import com.insuraTrack.repository.UserRepository;
+import com.insuraTrack.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 public class UserController {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
 
-    // ─── GET ALL USERS (Admin only) ──────────────────────────────────────────
-
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<UserDTO>> getAll() {
-        List<UserDTO> users = userRepository.findAll()
-                .stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(users);
-    }
-
-    // ─── GET USER BY ID ──────────────────────────────────────────────────────
-
-    @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserDTO> getById(@PathVariable String id) {
-        return userRepository.findById(id)
-                .map(u -> ResponseEntity.ok(toDTO(u)))
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    // ─── CREATE USER (Admin only) ────────────────────────────────────────────
-
+    /** ADMIN only — create a new user */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> create(@RequestBody Map<String, String> body) {
-        String name     = body.get("name");
-        String email    = body.get("email");
-        String password = body.get("password");
-        String role     = body.get("role");
-
-        if (name == null || name.isBlank())     return ResponseEntity.badRequest().body("Name is required");
-        if (email == null || email.isBlank())   return ResponseEntity.badRequest().body("Email is required");
-        if (password == null || password.isBlank()) return ResponseEntity.badRequest().body("Password is required");
-
-        if (userRepository.existsByEmail(email)) {
-            return ResponseEntity.status(409).body("Email already exists");
-        }
-
-        User user = User.builder()
-                .name(name)
-                .email(email)
-                .password(passwordEncoder.encode(password))
-                .role(role != null && role.equals("ADMIN")
-                        ? com.insuraTrack.enums.Role.ADMIN
-                        : com.insuraTrack.enums.Role.USER)
-                .active(true)
-                .build();
-
-        return ResponseEntity.status(201).body(toDTO(userRepository.save(user)));
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(user));
     }
 
-    // ─── UPDATE USER (Admin only) ────────────────────────────────────────────
+    /** ADMIN only — list all users */
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<User>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
+    }
 
+    /**
+     * FIX: Added /stats endpoint that frontend users.js calls.
+     * Computes stats from the active users list — no separate DB query needed.
+     */
+    @GetMapping("/stats")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Long>> getUserStats() {
+        List<User> all = userService.getAllUsers();
+        long total       = all.size();
+        long active      = all.stream().filter(User::isActive).count();
+        long inactive    = total - active;
+        long adminCount  = all.stream().filter(u -> u.getRole() != null && u.getRole().name().equals("ADMIN")).count();
+        long userCount   = total - adminCount;
+
+        Map<String, Long> stats = new HashMap<>();
+        stats.put("totalUsers",   total);
+        stats.put("activeUsers",  active);
+        stats.put("inactiveUsers",inactive);
+        stats.put("adminCount",   adminCount);
+        stats.put("userCount",    userCount);
+        return ResponseEntity.ok(stats);
+    }
+
+    /** ADMIN or self */
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id")
+    public ResponseEntity<User> getUserById(@PathVariable String id) {
+        return ResponseEntity.ok(userService.getUserById(id));
+    }
+
+    /** ADMIN or self */
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> update(@PathVariable String id, @RequestBody Map<String, String> body) {
-        return userRepository.findById(id).map(user -> {
-            if (body.containsKey("name") && !body.get("name").isBlank()) {
-                user.setName(body.get("name"));
-            }
-            if (body.containsKey("email") && !body.get("email").isBlank()) {
-                user.setEmail(body.get("email"));
-            }
-            if (body.containsKey("password") && !body.get("password").isBlank()) {
-                user.setPassword(passwordEncoder.encode(body.get("password")));
-            }
-            if (body.containsKey("role")) {
-                user.setRole(body.get("role").equals("ADMIN")
-                        ? com.insuraTrack.enums.Role.ADMIN
-                        : com.insuraTrack.enums.Role.USER);
-            }
-            if (body.containsKey("active")) {
-                user.setActive(Boolean.parseBoolean(body.get("active")));
-            }
-            return ResponseEntity.ok(toDTO(userRepository.save(user)));
-        }).orElse(ResponseEntity.notFound().build());
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id")
+    public ResponseEntity<User> updateUser(@PathVariable String id, @RequestBody User user) {
+        return ResponseEntity.ok(userService.updateUser(id, user));
     }
 
-    // ─── TOGGLE ACTIVE (Admin only) ──────────────────────────────────────────
-
-    @PutMapping("/{id}/toggle-active")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserDTO> toggleActive(@PathVariable String id) {
-        return userRepository.findById(id).map(user -> {
-            user.setActive(!user.isActive());
-            return ResponseEntity.ok(toDTO(userRepository.save(user)));
-        }).orElse(ResponseEntity.notFound().build());
-    }
-
-    // ─── DELETE USER (Admin only) ────────────────────────────────────────────
-
+    /** ADMIN only — soft delete */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
-        if (!userRepository.existsById(id)) return ResponseEntity.notFound().build();
-        userRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<Void> deleteUser(
+            @PathVariable String id,
+            @RequestParam String deletedBy) {
+        userService.softDeleteUser(id, deletedBy);
+        return ResponseEntity.noContent().build();
     }
 
-    // ─── MAPPER ──────────────────────────────────────────────────────────────
+    /** ADMIN only — restore / activate deleted user */
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> activateUser(@PathVariable String id) {
+        userService.activateUser(id);
+        return ResponseEntity.noContent().build();
+    }
 
-    private UserDTO toDTO(User user) {
-        return UserDTO.builder()
-                .id(user.getId())
-                .name(user.getName())
-                .email(user.getEmail())
-                .role(user.getRole())
-                .active(user.isActive())
-                .build();
+    /**
+     * FIX: Added /toggle-active endpoint called by users.js toggleUserStatus().
+     * Toggles active flag without requiring a full user object in the body.
+     */
+    @PatchMapping("/{id}/toggle-active")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> toggleActiveUser(@PathVariable String id) {
+        userService.toggleActive(id);
+        return ResponseEntity.noContent().build();
     }
 }

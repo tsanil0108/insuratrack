@@ -1,6 +1,5 @@
 package com.insuraTrack.dto;
 
-import com.insuraTrack.enums.Role;
 import lombok.Builder;
 import lombok.Data;
 
@@ -10,6 +9,6 @@ public class UserDTO {
     private String id;
     private String name;
     private String email;
-    private Role role;
+    private String role;
     private boolean active;
 }

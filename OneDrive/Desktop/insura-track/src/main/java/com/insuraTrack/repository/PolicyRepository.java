@@ -2,123 +2,62 @@ package com.insuraTrack.repository;
 
 import com.insuraTrack.enums.PolicyStatus;
 import com.insuraTrack.model.Policy;
-import com.insuraTrack.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface PolicyRepository extends JpaRepository<Policy, String> {
 
-    @Query("""
-        SELECT p FROM Policy p
-        JOIN FETCH p.company
-        JOIN FETCH p.insuranceType
-        JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.deleted = false
-    """)
-    List<Policy> findAllActive();
+    // Find by policy number (only non-deleted)
+    Optional<Policy> findByPolicyNumberAndDeletedFalse(String policyNumber);
 
-    @Query("""
-        SELECT p FROM Policy p
-        JOIN FETCH p.company
-        JOIN FETCH p.insuranceType
-        JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.user = :user AND p.deleted = false
-    """)
-    List<Policy> findByUserAndDeletedFalse(@Param("user") User user);
+    // Check existence (only non-deleted)
+    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Policy p WHERE p.policyNumber = :policyNumber AND p.deleted = false")
+    boolean existsByPolicyNumberAndDeletedFalse(@Param("policyNumber") String policyNumber);
 
-    @Query("""
-        SELECT p FROM Policy p
-        JOIN FETCH p.company
-        JOIN FETCH p.insuranceType
-        JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.company.id = :companyId AND p.deleted = false
-    """)
-    List<Policy> findByCompanyIdAndDeletedFalse(@Param("companyId") String companyId);
+    // Get all non-deleted policies
+    @Query("SELECT p FROM Policy p WHERE p.deleted = false")
+    List<Policy> findAllByDeletedFalse();
 
-    @Query("""
-        SELECT p FROM Policy p
-        JOIN FETCH p.company
-        JOIN FETCH p.insuranceType
-        JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.status = :status AND p.deleted = false
-    """)
-    List<Policy> findByStatusAndDeletedFalse(@Param("status") PolicyStatus status);
+    // ✅ ADD THIS METHOD - Get all soft-deleted policies
+    @Query("SELECT p FROM Policy p WHERE p.deleted = true")
+    List<Policy> findAllByDeletedTrue();
 
-    @Query("""
-        SELECT p FROM Policy p
-        JOIN FETCH p.company
-        JOIN FETCH p.insuranceType
-        JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.endDate BETWEEN :today AND :soon AND p.deleted = false
-    """)
-    List<Policy> findExpiringSoon(@Param("today") LocalDate today,
-                                  @Param("soon") LocalDate soon);
+    // Get by user (only non-deleted)
+    @Query("SELECT p FROM Policy p WHERE p.user.id = :userId AND p.deleted = false")
+    List<Policy> findAllByUserIdAndDeletedFalse(@Param("userId") String userId);
 
-    @Query("""
-        SELECT p FROM Policy p
-        JOIN FETCH p.company
-        JOIN FETCH p.insuranceType
-        JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.endDate < :today AND p.status = :status AND p.deleted = false
-    """)
-    List<Policy> findExpired(@Param("today") LocalDate today,
-                             @Param("status") PolicyStatus status);
+    // Get by status (only non-deleted)
+    @Query("SELECT p FROM Policy p WHERE p.status = :status AND p.deleted = false")
+    List<Policy> findAllByStatusAndDeletedFalse(@Param("status") PolicyStatus status);
 
-    @Query("SELECT COUNT(p) FROM Policy p WHERE p.status = :status AND p.deleted = false")
-    long countByStatus(@Param("status") PolicyStatus status);
+    // Get by company (only non-deleted)
+    @Query("SELECT p FROM Policy p WHERE p.company.id = :companyId AND p.deleted = false")
+    List<Policy> findAllByCompanyIdAndDeletedFalse(@Param("companyId") String companyId);
 
-    @Query("SELECT COALESCE(SUM(p.premiumAmount), 0) FROM Policy p WHERE p.deleted = false")
-    Double sumAllPremiums();
+    // Get by insurance type (only non-deleted)
+    @Query("SELECT p FROM Policy p WHERE p.insuranceType.id = :insuranceTypeId AND p.deleted = false")
+    List<Policy> findAllByInsuranceTypeIdAndDeletedFalse(@Param("insuranceTypeId") String insuranceTypeId);
 
-    @Query("""
-        SELECT p FROM Policy p
-        JOIN FETCH p.company
-        JOIN FETCH p.insuranceType
-        JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.id = :id AND p.deleted = false
-    """)
-    Optional<Policy> findActiveById(@Param("id") String id);
+    // Find by ID (only non-deleted)
+    @Query("SELECT p FROM Policy p WHERE p.id = :id AND p.deleted = false")
+    Optional<Policy> findByIdAndDeletedFalse(@Param("id") String id);
 
-    // ─── SOFT DELETE SUPPORT ─────────────────────────────────────────────────
+    // Find expiring policies
+    @Query("SELECT p FROM Policy p WHERE p.deleted = false AND p.endDate BETWEEN :start AND :end")
+    List<Policy> findExpiringBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
-    @Query("""
-        SELECT p FROM Policy p
-        LEFT JOIN FETCH p.company
-        LEFT JOIN FETCH p.insuranceType
-        LEFT JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.deleted = true
-    """)
-    List<Policy> findAllDeleted();
+    // Find policies that were renewed from a specific policy
+    @Query("SELECT p FROM Policy p WHERE p.renewedFromPolicyId = :policyId AND p.deleted = false")
+    List<Policy> findByRenewedFromPolicyId(@Param("policyId") String policyId);
 
-    @Query("""
-        SELECT p FROM Policy p
-        LEFT JOIN FETCH p.company
-        LEFT JOIN FETCH p.insuranceType
-        LEFT JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-        WHERE p.id = :id AND p.deleted = true
-    """)
-    Optional<Policy> findDeletedById(@Param("id") String id);
-
-    @Query("""
-        SELECT p FROM Policy p
-        LEFT JOIN FETCH p.insuranceType
-        LEFT JOIN FETCH p.company
-        LEFT JOIN FETCH p.provider
-        LEFT JOIN FETCH p.user
-    """)
-    List<Policy> findAllWithDetails();
+    // Find all policies expiring soon
+    @Query("SELECT p FROM Policy p WHERE p.deleted = false AND p.status = 'EXPIRING_SOON'")
+    List<Policy> findAllExpiringSoon();
 }

@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/dashboard")
+@RequestMapping("/api/v1/dashboard")  // ✅ ADDED v1/
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 public class DashboardController {

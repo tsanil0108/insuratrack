@@ -7,7 +7,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "notifications")
-@Getter @Setter
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -22,7 +23,7 @@ public class Notification extends BaseEntity {
     @Column(length = 1000)
     private String message;
 
-    private String type; // REMINDER, PAYMENT, EXPIRY, GENERAL
+    private String type;
 
     private boolean read = false;
 

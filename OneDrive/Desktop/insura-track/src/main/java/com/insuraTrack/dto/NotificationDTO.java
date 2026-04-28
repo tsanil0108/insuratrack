@@ -15,4 +15,17 @@ public class NotificationDTO {
     private boolean read;
     private LocalDateTime createdAt;
     private LocalDateTime readAt;
+
+    // ✅ Static factory — keeps mapping out of controller/service
+    public static NotificationDTO from(com.insuraTrack.model.Notification n) {
+        return NotificationDTO.builder()
+                .id(n.getId())
+                .title(n.getTitle())
+                .message(n.getMessage())
+                .type(n.getType())
+                .read(n.isRead())
+                .createdAt(n.getCreatedAt())
+                .readAt(n.getReadAt())
+                .build();
+    }
 }

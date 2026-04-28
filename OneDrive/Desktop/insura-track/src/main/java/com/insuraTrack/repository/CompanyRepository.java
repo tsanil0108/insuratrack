@@ -3,26 +3,23 @@ package com.insuraTrack.repository;
 import com.insuraTrack.model.Company;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface CompanyRepository extends JpaRepository<Company, String> {
 
-    List<Company> findByActiveTrueAndDeletedFalse();
+    List<Company> findAllByDeletedFalseAndActiveTrue();
 
-    default List<Company> findByActiveTrue() {
-        return findByActiveTrueAndDeletedFalse();
-    }
+    Optional<Company> findByIdAndDeletedFalse(String id);
 
-    // ✅ ADD THIS METHOD
-    @Query("SELECT c FROM Company c WHERE c.id = :id AND c.deleted = false")
-    Optional<Company> findActiveById(@Param("id") String id);
+    // ✅ FIX: Check duplicate name only among non-deleted companies
+    boolean existsByNameIgnoreCaseAndDeletedFalse(String name);
 
+
+    // ✅ For recycle bin — fetch soft-deleted companies
     @Query("SELECT c FROM Company c WHERE c.deleted = true")
-    List<Company> findAllDeleted();
-
-    @Query("SELECT c FROM Company c WHERE c.id = :id AND c.deleted = true")
-    Optional<Company> findDeletedById(@Param("id") String id);
+    List<Company> findAllByDeletedTrue();
 }

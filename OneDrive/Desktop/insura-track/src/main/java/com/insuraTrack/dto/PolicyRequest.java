@@ -1,22 +1,36 @@
 package com.insuraTrack.dto;
 
-import com.insuraTrack.enums.PremiumFrequency;
-import lombok.Data;
+import lombok.*;
 
 import java.time.LocalDate;
 
-@Data
+@Getter @Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class PolicyRequest {
-    private String policyNumber;
+
     private String companyId;
     private String insuranceTypeId;
+    private String insuranceItemId;
     private String providerId;
-    private String userId;        // ← added for user assignment
+    private String hypothecationId;
+
+    private String policyNumber;
     private String description;
+
     private double premiumAmount;
     private double sumInsured;
+
     private LocalDate startDate;
     private LocalDate endDate;
-    private PremiumFrequency premiumFrequency;
-    private boolean hypothecation;
+
+    private String premiumFrequency;
+
+    // ✅ Payment fields (sent by frontend)
+    private double amountPaid;
+    private LocalDate paidDate;
+    private String paymentMode;
+    private String paymentReference;
+    private boolean paid;
 }
