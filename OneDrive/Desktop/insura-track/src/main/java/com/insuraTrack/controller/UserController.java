@@ -80,7 +80,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    /** ADMIN only — restore / activate deleted user */
+
     @PatchMapping("/{id}/activate")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> activateUser(@PathVariable String id) {
@@ -88,10 +88,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * FIX: Added /toggle-active endpoint called by users.js toggleUserStatus().
-     * Toggles active flag without requiring a full user object in the body.
-     */
+
     @PatchMapping("/{id}/toggle-active")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> toggleActiveUser(@PathVariable String id) {

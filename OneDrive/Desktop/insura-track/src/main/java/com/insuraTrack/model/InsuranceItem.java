@@ -13,8 +13,10 @@ import lombok.*;
 @Builder
 public class InsuranceItem extends BaseEntity {
 
+    // ✅ FIX: nullable = false removed → allows items with no insurance type
+    //         Without this fix, items created without a type crash the /all endpoint
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "insurance_type_id", nullable = false)
+    @JoinColumn(name = "insurance_type_id", nullable = true)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private InsuranceType insuranceType;
 

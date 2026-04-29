@@ -20,6 +20,7 @@ public class InsuranceItemServiceImpl implements InsuranceItemService {
     @Override
     @Transactional
     public InsuranceItem create(InsuranceItem item) {
+        // ✅ FIX: insuranceType is now optional — don't fail if not provided
         return insuranceItemRepository.save(item);
     }
 
@@ -30,9 +31,17 @@ public class InsuranceItemServiceImpl implements InsuranceItemService {
                 .orElseThrow(() -> new ResourceNotFoundException("InsuranceItem not found: " + id));
     }
 
+    // ✅ Active only — used in policy forms / dropdowns
     @Override
     public List<InsuranceItem> getAll() {
         return insuranceItemRepository.findAllByDeletedFalseAndActiveTrue();
+    }
+
+    // ✅ Active + Inactive — used for analytics/graphs
+    // ✅ FIX: Uses LEFT JOIN FETCH to safely load insuranceType (avoids LazyInitException on null FK)
+    @Override
+    public List<InsuranceItem> getAllIncludingInactive() {
+        return insuranceItemRepository.findAllByDeletedFalseWithType();
     }
 
     @Override
@@ -47,7 +56,7 @@ public class InsuranceItemServiceImpl implements InsuranceItemService {
         existing.setName(updated.getName());
         existing.setDescription(updated.getDescription());
         existing.setActive(updated.isActive());
-        existing.setInsuranceType(updated.getInsuranceType());
+        existing.setInsuranceType(updated.getInsuranceType()); // Can be null
         return insuranceItemRepository.save(existing);
     }
 

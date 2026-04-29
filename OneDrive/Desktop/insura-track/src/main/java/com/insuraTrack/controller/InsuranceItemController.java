@@ -23,7 +23,7 @@ public class InsuranceItemController {
         return ResponseEntity.status(HttpStatus.CREATED).body(insuranceItemService.create(item));
     }
 
-    // ✅ SINGLE Get mapping with optional typeId parameter
+    // ✅ Default GET — active only (used in dropdowns/policy forms)
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','USER')")
     public ResponseEntity<List<InsuranceItem>> getAll(
@@ -34,13 +34,19 @@ public class InsuranceItemController {
         return ResponseEntity.ok(insuranceItemService.getAll());
     }
 
+    // ✅ NEW: Analytics endpoint — returns ALL items including inactive (for graphs)
+    @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('ADMIN','USER')")
+    public ResponseEntity<List<InsuranceItem>> getAllIncludingInactive() {
+        return ResponseEntity.ok(insuranceItemService.getAllIncludingInactive());
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','USER')")
     public ResponseEntity<InsuranceItem> getById(@PathVariable String id) {
         return ResponseEntity.ok(insuranceItemService.getById(id));
     }
 
-    // ✅ Keep this for backward compatibility or remove if not needed
     @GetMapping("/by-type/{insuranceTypeId}")
     @PreAuthorize("hasAnyRole('ADMIN','USER')")
     public ResponseEntity<List<InsuranceItem>> getByInsuranceType(@PathVariable String insuranceTypeId) {
